@@ -17,6 +17,7 @@ use App\Models\Tenant;
 use App\Models\CentralTenantTelations;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
@@ -102,22 +103,22 @@ class AuthController extends Controller
         $tenantUser->assignRole($role);
 
         // Access Token (15 minutes)
-        $token = $tenantUser->createToken('auth-token', ['*'], now()->addMinutes(10))->plainTextToken;
+        // $token = $tenantUser->createToken('auth-token', ['*'], now()->addMinutes(10))->plainTextToken;
 
-        $accessToken->accessToken->token_type = 'access';
-        $accessToken->accessToken->expires_at = now()->addMinutes(10);
-        $accessToken->accessToken->save();
+        // $accessToken->accessToken->token_type = 'access';
+        // $accessToken->accessToken->expires_at = now()->addMinutes(10);
+        // $accessToken->accessToken->save();
 
-        // Refresh Token (7 days)
-        $refreshToken = $tenantUser->createToken(
-            'refresh_token',
-            ['refresh'],
-            now()->addMinutes(30)
-        );
+        // // Refresh Token (7 days)
+        // $refreshToken = $tenantUser->createToken(
+        //     'refresh_token',
+        //     ['refresh'],
+        //     now()->addMinutes(30)
+        // );
 
-        $refreshToken->accessToken->token_type = 'refresh';
-        $refreshToken->accessToken->expires_at = now()->addMinutes(30);
-        $refreshToken->accessToken->save();
+        // $refreshToken->accessToken->token_type = 'refresh';
+        // $refreshToken->accessToken->expires_at = now()->addMinutes(30);
+        // $refreshToken->accessToken->save();
 
         $tenantUser->sendEmailVerificationNotification();
 
@@ -535,8 +536,17 @@ class AuthController extends Controller
         $request->validate([
             'email' => 'required|email',
             'password' => 'required',
+            'recaptcha_token' => 'required'
         ]);
 
+        $recaptcha = $this->verifyRecaptcha($request->recaptcha_token);
+
+        if (!$recaptcha['success']) {
+            return response()->json([
+                'message' => 'Captcha verification failed'
+            ], 422);
+        }
+        
         tenancy()->end();
 
         $google2fa = new Google2FA();
@@ -597,6 +607,19 @@ class AuthController extends Controller
         }
 
         return response()->json(['message' => 'Invalid credentials'], 401);
+    }
+
+    private function verifyRecaptcha($token)
+    {
+        $response = Http::asForm()->post(
+            'https://www.google.com/recaptcha/api/siteverify',
+            [
+                'secret' => env('RECAPTCHA_SECRET'),
+                'response' => $token,
+            ]
+        );
+
+        return $response->json();
     }
 
     private function handleMfaFlow($user, $userType, $tenantId, $google2fa)

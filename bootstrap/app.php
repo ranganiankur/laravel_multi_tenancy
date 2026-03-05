@@ -26,8 +26,15 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             '2fa' => \PragmaRX\Google2FALaravel\Middleware::class,
+            'verify.recaptcha' => \App\Http\Middleware\VerifyRecaptcha::class,
+
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        $exceptions->render(function (\Illuminate\Http\Exceptions\ThrottleRequestsException $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Too many attempts. Please try again later.'
+            ], 429);
+        });
     })->create();
